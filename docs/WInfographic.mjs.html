@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>WInfographic.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#WInfographic">WInfographic</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">WInfographic.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// WInfographic — 統一產圖入口: 輸入正規化繪圖數據 inp 與 opt.type, 產出資訊圖 PNG(Playwright 之 Chromium 渲染, 2 倍解析度, 圖內不畫圖名)
+//   opt.type: 'circles'(圓形放射圖)、'hexagon'(六邊形資訊圖)、'hierarchy'(層級樹, opt.mode 'p1' 純 HTML/CSS、'p2' d3-org-chart)
+//   各圖種之版式與欄位見 src/circles/gen.mjs、src/hexagon/gen.mjs、src/hierarchy/ 檔頭說明
+//   回傳: Promise&lt;Buffer>(PNG); 本檔只有預設匯出(具名匯出會使 UMD 打包改為具名輸出)
+import isestr from 'wsemi/src/isestr.mjs'
+import iseobj from 'wsemi/src/iseobj.mjs'
+import isearr from 'wsemi/src/isearr.mjs'
+import normOpt from './common/normOpt.mjs'
+
+// 各圖種延遲載入: 依 opt.type、opt.mode 動態 import()
+const LOADERS = {
+    'circles': () => import('./circles/gen.mjs'),
+    'hexagon': () => import('./hexagon/gen.mjs'),
+    'hierarchy-p1': () => import('./hierarchy/p1/gen.mjs'),
+    'hierarchy-p2': () => import('./hierarchy/p2/gen.mjs'),
+}
+
+// checkCenterItems: 檢核 circles 與 hexagon 共用之數據 { center: { title }, items: [{ label }] }
+function checkCenterItems(inp) {
+    if (!iseobj(inp.center) || !isestr(inp.center.title)) {
+        throw new Error('invalid inp.center, 須為 { title }')
+    }
+    if (!isearr(inp.items)) {
+        throw new Error('invalid inp.items, 須為非空陣列')
+    }
+    for (let it of inp.items) {
+        if (!iseobj(it) || !isestr(it.label)) {
+            throw new Error('invalid inp.items, 每項須有 label')
+        }
+        if (it.notes &amp;&amp; !Array.isArray(it.notes)) {
+            throw new Error('invalid inp.items, notes 須為陣列')
+        }
+    }
+}
+
+// checkTreeNode: 檢核層級樹節點, 遞迴檢核 children
+function checkTreeNode(n) {
+    if (!iseobj(n) || !isestr(n.title)) {
+        throw new Error('invalid inp.tree, 每個節點須有 title')
+    }
+    if (n.children !== undefined &amp;&amp; !Array.isArray(n.children)) {
+        throw new Error('invalid inp.tree, children 須為陣列')
+    }
+    if (n.items &amp;&amp; !Array.isArray(n.items)) {
+        throw new Error('invalid inp.tree, items 須為陣列')
+    }
+    for (let c of (n.children || [])) {
+        checkTreeNode(c)
+    }
+}
+
+/**
+ * 產製資訊圖 PNG
+ *
+ * @param {Object} inp 輸入正規化繪圖數據物件,格式依 opt.type:circles、hexagon 為 { center: { title }, items: [{ label, icon?, cls?, notes? }] }(hexagon 之項目另可給 side);hierarchy 為 { tree: { title, subtitle?, icon?, children: [{ title, desc?, items?, icon?, cls?, children? }] } }
+ * @param {Object} opt 輸入設定物件
+ * @param {String} opt.type 輸入圖種字串,必給,可選 'circles'(圓形放射圖)、'hexagon'(六邊形資訊圖)、'hierarchy'(層級樹)
+ * @param {Number|String} [opt.startAngle=-90] 輸入 circles 之首個外圓角度數字或數字字串(度,-90 為正上方,順時針遞增),非有效數字(含 Infinity)或絕對值超過 360000 視為未給,預設 -90
+ * @param {String} [opt.mode='p1'] 輸入 hierarchy 之產線字串,可選 'p1'(純 HTML/CSS,不需網路)或 'p2'(d3-org-chart,自動 fit,需網路載 CDN),預設 'p1'
+ * @param {String} [opt.boxStyle='band'] 輸入 hierarchy p1 之節點版式字串,可選 'band'(色帶標題盒)或 'card'(卡片盒,不顯示節點之 items),預設 'band'
+ * @param {Number|String} [opt.nodeWidth=196] 輸入 hierarchy p2 之子節點盒寬正整數或其字串(px),非正整數視為未給,預設 196
+ * @param {Number|String} [opt.width=1300] 輸入 hierarchy p2 之畫布寬正整數或其字串(px),非正整數視為未給,預設 1300
+ * @param {Number|String} [opt.height=640] 輸入 hierarchy p2 之畫布高正整數或其字串(px),非正整數視為未給,預設 640
+ * @param {Boolean} [opt.compact=false] 輸入 hierarchy p2 是否緊湊佈局布林值,預設 false
+ * @returns {Promise} 回傳 Promise,resolve 回傳 PNG 圖之 Buffer,reject 回傳錯誤訊息(inp 或 opt.type 不合、hexagon 單側超過 5 項、p2 無法連線載入繪圖庫時)
+ * @example
+ *
+ * import fs from 'fs'
+ * import WInfographic from 'w-infographic'
+ *
+ * let inp = {
+ *     center: { title: '產品開發' },
+ *     items: [
+ *         { label: '需求', icon: 'mdi:clipboard-text', notes: ['訪談', '規格'] },
+ *         { label: '設計', icon: 'mdi:pencil-ruler', notes: ['架構', '介面'] },
+ *         { label: '實作', icon: 'mdi:code-tags', notes: ['開發', '審查'] },
+ *         { label: '測試', icon: 'mdi:test-tube', notes: ['單元', '整合'] },
+ *     ],
+ * }
+ *
+ * let buf = await WInfographic(inp, { type: 'circles', startAngle: -45 })
+ * fs.writeFileSync('circles.png', buf)
+ * // => 產出 circles.png
+ */
+async function WInfographic(inp, opt = {}) {
+    let o = normOpt(opt)
+    if (!iseobj(inp)) {
+        throw new Error('invalid inp, 須為正規化繪圖數據物件')
+    }
+
+    if (o.type === 'circles') {
+        checkCenterItems(inp)
+        let { gen } = await LOADERS.circles()
+        return await gen(inp, { startAngle: o.startAngle })
+    }
+    if (o.type === 'hexagon') {
+        checkCenterItems(inp)
+        let { gen } = await LOADERS.hexagon()
+        return await gen(inp)
+    }
+
+    checkTreeNode(inp.tree)
+    if (o.mode === 'p2') {
+        let { gen } = await LOADERS['hierarchy-p2']()
+        return await gen(inp, { nodeWidth: o.nodeWidth, width: o.width, height: o.height, compact: o.compact })
+    }
+    let { gen } = await LOADERS['hierarchy-p1']()
+    return await gen(inp, { boxStyle: o.boxStyle })
+}
+
+export default WInfographic
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Nov 04 2026 20:11:54 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>
