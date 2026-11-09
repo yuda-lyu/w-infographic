@@ -17,13 +17,15 @@ const UPDATE = process.env.UPDATE_BASELINE === '1' // 僅產製標準圖時設�
 const isPng = (buf) => Buffer.isBuffer(buf) && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47
 
 // pixelDiff: 回傳兩 PNG 之差異像素數; 尺寸不同回傳 Infinity
+// pixelmatch 8 之色差度量為 OKLab HyAB(7 為 YIQ), 無選項可還原 7 之判定; 選項為
+// threshold 0.1、includeAA false(忽略反鋸齒邊緣)、checkerboard true(半透明像素以棋盤格底色混合後比較, 為 8 之預設)
 function pixelDiff(a, b, diffPng) {
     let pa = PNG.sync.read(a)
     let pb = PNG.sync.read(b)
     if (pa.width !== pb.width || pa.height !== pb.height) {
         return Infinity
     }
-    return pixelmatch(pa.data, pb.data, diffPng ? diffPng.data : null, pa.width, pa.height, { includeAA: false, threshold: 0.1 })
+    return pixelmatch(pa.data, pb.data, diffPng ? diffPng.data : null, pa.width, pa.height, { threshold: 0.1, includeAA: false, checkerboard: true })
 }
 
 // assertBaseline: 與 test/pics/<name>.png 比對; 不符時三聯組證據落 ./testPending/(不覆蓋、不自動刪)

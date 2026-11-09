@@ -83,7 +83,8 @@
 ## R12 測試
 
 - 檔名前綴:一律 `unit-`(`test/*.test.mjs`).本套件無 HTTP/RPC 介面與使用者互動畫面,故無 `api-`、`e2e-`;測試於真瀏覽器載入各圖種產生之 HTML 做語意斷言(幾何、配色、逃逸),並以標準圖做補強.
-- 標準圖比對:pixelmatch `includeAA:false`、`threshold:0.1`、容差 100 像素;不符時三聯組證據落 `./testPending/`(gitignore,不自動刪);臨時檔落 `test/_tmp/<案名>/`(目前無).
+- 標準圖比對:pixelmatch 8(devDependencies `^8.0.0`,色差度量為 OKLab HyAB;7 為 YIQ,無選項可還原 7 之判定),選項 `{ threshold: 0.1, includeAA: false, checkerboard: true }`(單一擁有者 `test/tools/lib.mjs` 之 `pixelDiff`,`assertBaseline` 與 `unit-entry` 之「鑑別力」斷言共用),容差 `MAX_DIFF` 100 像素;不符時三聯組證據落 `./testPending/`(gitignore,不自動刪);臨時檔落 `test/_tmp/<案名>/`(目前無).
+- 比對度量改變之處置(7→8 於 2026-11-09 套用,6 張標準圖之當次輸出與標準圖位元組相同,0 張失敗、0 張重產):8 比 7 敏感之處為近黑區 16～31 級明度差、飽和色 16～31 級色偏,透明背景下半透明內容之真實改變 8 抓得到而 7 抓不到;每通道 ≤ 12 級之雜訊兩版皆計 0.日後升 pixelmatch 大版或改選項後若有標準圖失敗:暫裝舊版對照(`npm i --no-save pixelmatch7@npm:pixelmatch@7.2.0`,不寫入 `package.json`),兩版以同一組選項各算計數;舊版計數 ≤ 容差 < 新版計數者為「只因度量而失敗」之候選,須逐張目視確認畫面內容未改變,才可 `UPDATE_BASELINE=1` 搭配 `--grep <案名>` 定點重產該張;兩版皆超容差者非度量所致,依一般流程查因,不得以重產處理;不放寬容差或 threshold、不整批重產(R2).
 - 每條斷言上方註明對應之規格句(各圖種模組檔頭、`WInfographic.mjs` JSDoc、本帳本).
 - p2 之測試需連 jsDelivr.
 - 「不需網路」之規格以 `requestsOf`(`test/tools/lib.mjs`)斷言:circles、hexagon、p1 色帶與卡片之頁面載入後不得有任何非 `data:`/`about:`/`blob:` 之請求(`unit-entry`),並以含外部圖片之頁面做對照確認偵測有效.

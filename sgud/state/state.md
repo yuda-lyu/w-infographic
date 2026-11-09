@@ -6,6 +6,7 @@
 
 - `package.json` 版本 1.0.0,尚未發布(發布流程自行遞增).
 - 最近一次驗證(2026-11-04):`npm test`(mocha `--no-parallel`,經測試鎖)43 passing、0 failing(`unit-circles` 7、`unit-entry` 9、`unit-hexagon` 8、`unit-hierarchy` 13、`unit-opt` 6),6 張標準圖逐一比對通過、`testPending` 無新增;`npm pack` 解開後獨立安裝(只用宣告之依賴)同為 43 passing;以 `dist` 載入之 UMD 出圖,6 張標準圖資料之輸出與標準圖位元組相同;植入 23 種單一錯誤之變異,測試皆抓到.eslint 0 error.
+- 標準圖比對度量(2026-11-09 起):pixelmatch 升至 8.0.0(`package.json` devDependencies `^8.0.0`,lock 釘 8.0.0),`test/tools/lib.mjs` 之 `pixelDiff` 選項為 `{ threshold: 0.1, includeAA: false, checkerboard: true }`,容差 `MAX_DIFF` 100 不變(規則帳本 R12).升版後 `npm test`(mocha `--no-parallel`,經測試鎖)43 passing、0 failing(`unit-circles` 7、`unit-entry` 9、`unit-hexagon` 8、`unit-hierarchy` 13、`unit-opt` 6),`testPending` 未產生;6 張標準圖之當次輸出與標準圖位元組相同(8 之差異計數皆 0、RGBA 差異像素皆 0),0 張重產.
 - p2 之測試需連 jsDelivr;其餘不需網路.
 
 ## 功能現況
@@ -30,4 +31,4 @@
 
 ## 與標準圖
 
-- `test/pics` 6 張標準圖與提出方原型位元組相同,本輪 0 張重產.
+- `test/pics` 6 張標準圖與提出方原型位元組相同;pixelmatch 升 8 後仍為 0 張失敗、0 張重產(`git diff --stat -- test/pics` 無輸出).

@@ -16,6 +16,8 @@
 - 測試網路失敗不必真的斷網:以 `page.route(/cdn\.jsdelivr\.net/, handler)` 於頁面建立後、載入前注入(`abort()` 模擬離線、`fulfill({ status: 404 })` 模擬 CDN 錯誤),故 p2 之 `gen` 留 `hooks.onPage(page)` 接縫;瀏覽器是否已關閉以 `page.context().browser().isConnected()` 斷言.
 - 本套件之測試於真瀏覽器渲染,單檔約數十秒至數分鐘;跑測試須經測試鎖,本機常有他套件之 e2e 獨佔,排鎖可能數小時,宜先備齊證據驅動腳本於一次持鎖期間跑完(基準、修前紅、現行比對、變異、打包獨立安裝).
 - 現行來源與套件之輸出比對:兩者皆用 Playwright 之 Chromium、同一份資料,可直接以位元組相等加 pixelmatch(`includeAA:false`、`threshold:0.1`)判定;p2 之現行輸出未裁切,比對時須另行以 sharp `trim()` 加四邊補白套用同一裁切.
+- pixelmatch 7→8:色差度量由 YIQ 改為 OKLab HyAB,無選項可還原;選項維持 `threshold: 0.1`、`includeAA: false`,另明寫 `checkerboard: true`(8 之預設,半透明像素以棋盤格底色混合後比較).8 比 7 敏感之處是近黑區之明度差與飽和色之色偏(16～31 級),每通道 ≤ 12 級之雜訊兩版皆為 0.本套件 6 張標準圖與當次輸出位元組相同,升版不受影響;量法:於 `./tmp/` 以腳本渲染 6 圖,對標準圖算 8 之差異計數、RGBA 差異像素數與最大通道差,全為 0.
+- `npm install <套件>@<版> --save-dev` 會順帶把 `package-lock.json` 頂層(`version` 兩處)同步為 `package.json` 之版號,並於 `package.json` 檔尾補換行;升依賴時只應動該依賴之行,事後以 `git diff` 檢視並還原這些非必要改動.
 - 變異測試以副本執行(複製 `src` 與 `test` 至 `tmp/` 下,植入單一文字替換,只跑對應之測試檔與 `--grep`),植入點須先驗證存在且唯一,否則「抓到」可能是植入未生效.
 
 ## 環境
