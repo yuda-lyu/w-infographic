@@ -1,4 +1,4 @@
-// WInfographic — 統一產圖入口: 輸入正規化繪圖數據 inp 與 opt.type, 產出資訊圖 PNG(Playwright 之 Chromium 渲染, 2 倍解析度, 圖內不畫圖名)
+// WInfographic — 統一產圖入口: 輸入正規化繪圖數據 inp 與 opt.type, 產出資訊圖 PNG(經 w-playwright 啟動 Chromium 渲染, 2 倍解析度, 圖內不畫圖名)
 //   opt.type: 'circles'(圓形放射圖)、'hexagon'(六邊形資訊圖)、'hierarchy'(層級樹, opt.mode 'p1' 純 HTML/CSS、'p2' d3-org-chart)
 //   各圖種之版式與欄位見 src/circles/gen.mjs、src/hexagon/gen.mjs、src/hierarchy/ 檔頭說明
 //   回傳: Promise<Buffer>(PNG); 本檔只有預設匯出(具名匯出會使 UMD 打包改為具名輸出)
@@ -62,7 +62,7 @@ function checkTreeNode(n) {
  * @param {Number|String} [opt.width=1300] 輸入 hierarchy p2 之畫布寬正整數或其字串(px),非正整數視為未給,預設 1300
  * @param {Number|String} [opt.height=640] 輸入 hierarchy p2 之畫布高正整數或其字串(px),非正整數視為未給,預設 640
  * @param {Boolean} [opt.compact=false] 輸入 hierarchy p2 是否緊湊佈局布林值,預設 false
- * @returns {Promise} 回傳 Promise,resolve 回傳 PNG 圖之 Buffer,reject 回傳錯誤訊息(inp 或 opt.type 不合、hexagon 單側超過 5 項、p2 無法連線載入繪圖庫時)
+ * @returns {Promise} 回傳 Promise,resolve 回傳 PNG 圖之 Buffer,reject 回傳錯誤訊息(inp 或 opt.type 不合、hexagon 單側超過 5 項、p2 無法連線載入繪圖庫時; 瀏覽器啟動失敗時為 w-playwright 之錯誤, 其 code 如 E_BROWSER_MISSING 表受管瀏覽器未安裝, 請先 await wpw.ensureChromium())
  * @example
  *
  * import fs from 'fs'

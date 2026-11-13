@@ -18,6 +18,21 @@ To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-
 npm i w-infographic
 ```
 
+### 瀏覽器(Chromium)之取得與啟動
+
+本套件以無頭之 Chromium(Playwright 之 headless shell)渲染,**一律經自有套件 [w-playwright](https://www.npmjs.com/package/w-playwright) 啟動**;不使用真 Chrome、Edge 或完整 Chromium,故不需安裝 Google Chrome。使用端不需、也不應另裝 `playwright` 或 `playwright-core`。
+
+1. **安裝即帶入**:`npm i w-infographic` 會帶入 `w-playwright`,其依賴 `playwright-core` 精確 `1.64.1`。
+2. **受管瀏覽器之取得**:請在首次產圖前執行一次 `await wpw.ensureChromium()`(使用端專案須自行 `npm i w-playwright` 才能 `import`;本套件所用版本為 `^1.0.1`)。**不要用 `npx playwright install`**(依賴樹中他版被提升時會下載到不同版本之瀏覽器)。**自動安裝預設關**:未安裝而產圖即 reject,其 `code` 為 `E_BROWSER_MISSING`(訊息附 `ensureChromium` 用法)。
+   ```js
+   import wpw from 'w-playwright'
+   await wpw.ensureChromium() // 下載並安裝 headless shell(已安裝則不重複下載)
+   ```
+3. **離線**:於可連網之機器以同版 w-playwright 執行 `ensureChromium()`,把 Playwright 之瀏覽器資料夾(Windows 預設 `%LOCALAPPDATA%\ms-playwright` 內之 `chromium_headless_shell-*`)複製至目標機,並以環境變數 `PLAYWRIGHT_BROWSERS_PATH` 指向該資料夾;**此變數須在載入本套件前設定**。
+4. **守門參數(一律加入)**:w-playwright 於每次啟動之命令列**恰給一個** `--disable-features`,內容為 Playwright 預設清單加上 `AutofillAiWalletPrivatePasses`。原因:Windows 上 Chromium 153 起,每啟動一個新的瀏覽器根行程,即以無效密碼替目前使用者呼叫一次 `LogonUser`(錯誤密碼次數 +1,本機原則 10 分鐘內 10 次即鎖定帳號);停用該功能即不再發生。本套件之 headless shell 本不觸發,仍一律加入以保持與其他自有套件一致;不提供停用選項。
+5. **不支援之環境變數**(w-playwright 會使守門失效,一律拒絕為 `E_ENV`):`PWDEBUG` 為 inspector 模式之值、`SELENIUM_REMOTE_URL`。
+6. **啟動失敗之錯誤**:reject 帶 `code` 之 `Error`(`E_BROWSER_MISSING`、`E_LAUNCH`、`E_LAUNCH_TIMEOUT`、`E_ENV`、`E_PW_VERSION` 等,見 w-playwright 之 README),訊息為固定詞彙,不再是 Playwright 之原文(原文含完整命令列)。
+
 ## Example
 
 ```js
@@ -55,7 +70,7 @@ fs.writeFileSync('tree-p2.png', await WInfographic(tree, { type: 'hierarchy', mo
 
 ## Notes
 
-- 產出 PNG Buffer,以 Playwright 之 Chromium 渲染,解析度為 2 倍。圖內不畫圖名。
+- 產出 PNG Buffer,以 Chromium 渲染(經 w-playwright 啟動,見上〈瀏覽器(Chromium)之取得與啟動〉),解析度為 2 倍。圖內不畫圖名。
 - 圖內字型固定為微軟正黑體,須於 Windows 或已安裝該字型之環境產製。
 - hierarchy 之 p2 由 jsDelivr CDN 載入繪圖庫(版本精確鎖定),產製時須可連線;其餘不需網路。
 - icon 為 `'<svg'` 開頭之 raw SVG(原樣內嵌,內容由呼叫端負責)或 `'mdi:名稱'`(@mdi/js,kebab-case)。

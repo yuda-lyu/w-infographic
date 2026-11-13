@@ -20,6 +20,13 @@
 - `npm install <套件>@<版> --save-dev` 會順帶把 `package-lock.json` 頂層(`version` 兩處)同步為 `package.json` 之版號,並於 `package.json` 檔尾補換行;升依賴時只應動該依賴之行,事後以 `git diff` 檢視並還原這些非必要改動.
 - 變異測試以副本執行(複製 `src` 與 `test` 至 `tmp/` 下,植入單一文字替換,只跑對應之測試檔與 `--grep`),植入點須先驗證存在且唯一,否則「抓到」可能是植入未生效.
 
+## 改經 w-playwright 啟動(2026-11-13)
+
+- 接線測試之作法:`wpw.setBrowserTypeForTest({ launch: async (o, next) => { seen.push(o); return await next() } })` 取得合併後之選項並以 `next()` 走真路徑(headless shell,不啟動真 Chrome);不需網路、不啟動瀏覽器之啟動點(p2,產圖須連 jsDelivr)則讓替身拋錯,斷言產圖 reject 且 `seen.length === 1`.替身只作用於同一份 w-playwright;測試必須斷言替身確被呼叫,否則啟動點仍用舊寫法時測試照樣綠(修前紅:3 個接線案皆 `0 !== 1`).
+- 「不直接匯入 playwright」之靜態測試會命中自己:測試檔內若含 `from 'playwright'` 之範例字串,掃描 `test/` 時自己先被命中;範例以拼接組成(`['await import', '("playwright-core")'].join('')`),並以正例/反例各一確認正則抓得到、不誤抓 `w-playwright`.
+- `npm uninstall playwright` 與 `npm i w-playwright` 會再度把 `package-lock.json` 頂層 `version` 兩處同步為 `package.json` 之版號,並在 `package.json` 檔尾補換行;事後以 `git diff` 還原這些非必要改動(與前述 `npm install --save-dev` 同現象).
+- dist 之驗證:不在原地建置(`dist` 為入版控之發布產物);複製 `src`、`toolg`、`babel.config.js`、`package.json` 至 `./tmp/<夾>/distcopy/`,以 `quiet-run --cwd` 指向副本執行 `node toolg/gDistRollup.mjs`;副本位於 repo 內 `tmp` 下,Node 向上找到 repo 之 `node_modules`,不需目錄連結.dist 中 `require("w-playwright")`、`require("sharp")`、`require("@mdi/js")` 三個外部依賴,無 `playwright`;以 `createRequire` 載入 UMD、`w-playwright` 之預設匯出(物件)經 rollup 互通後可直接 `wpw.launchChromium()`.
+
 ## 環境
 
 - Git Bash 之 `tar -xzf C:/路徑` 會把 `C:` 當遠端主機而失敗;改用 `/c/路徑`.

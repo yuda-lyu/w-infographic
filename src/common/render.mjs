@@ -1,4 +1,4 @@
-import { chromium } from 'playwright'
+import wpw from 'w-playwright'
 
 const TRIM_PAD = 24 // 成品四邊統一留白 px(自視覺邊界起算)
 
@@ -57,8 +57,9 @@ function measure(selector) {
 }
 
 // renderTrimmed: 渲染 html 並依 selector 內容之視覺邊界裁切後回傳 PNG Buffer, 成品四邊留白寬度一致(畫布須為 .wrap 且自 0,0 起)
+//   瀏覽器經 w-playwright 啟動(無頭之 headless shell, 一律加入其守門參數; 受管瀏覽器未安裝時拋 code 為 E_BROWSER_MISSING 之錯誤, 請先 wpw.ensureChromium())
 async function renderTrimmed(html, selector) {
-    let browser = await chromium.launch()
+    let browser = await wpw.launchChromium()
     try {
         let page = await browser.newPage({ deviceScaleFactor: 2 }) // 2x 提高清晰度
         await page.setContent(html, { waitUntil: 'load' })

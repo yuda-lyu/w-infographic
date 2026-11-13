@@ -2,7 +2,7 @@
 
 本檔為套件設計與開發階段之規則帳本(藍圖),為要求程式碼須長成什麼樣,或由規格產出之測試(項目/說明/流程)有哪些,包含軸、單一擁有者、已知限制、破壞性變更紀錄,以及對應是哪些測試檔案或指令等,由agent自行編列、擴充與維護.當前已做到哪些記於`sgud/state/state.md`.過長時依類型拆為`rulebook_<類型>.md`,本檔只留索引.
 
-套件定位:由正規化數據產製資訊圖 PNG(Node 端,Playwright 之 Chromium 渲染,2 倍解析度,圖內不畫圖名).圖種:`circles`(圓形放射圖)、`hexagon`(六邊形資訊圖)、`hierarchy`(層級樹,`p1` 純 HTML/CSS、`p2` d3-org-chart).流程圖屬 w-flowchart,甘特圖屬 w-ganttchart,不在本套件.
+套件定位:由正規化數據產製資訊圖 PNG(Node 端,經 w-playwright 啟動之 Chromium 渲染,2 倍解析度,圖內不畫圖名).圖種:`circles`(圓形放射圖)、`hexagon`(六邊形資訊圖)、`hierarchy`(層級樹,`p1` 純 HTML/CSS、`p2` d3-org-chart).流程圖屬 w-flowchart,甘特圖屬 w-ganttchart,不在本套件.
 
 判準欄:已套/未套/刻意不套.盤點指令於套件根執行(Grep 工具或 `git grep`;檔案尚未提交時 `git grep` 須加 `--untracked`).
 
@@ -72,23 +72,32 @@
 
 ## R10 渲染方式
 
-- 現況判斷(待主控裁定):直接呼叫 Playwright,不經 w-html2png.理由:本套件須於頁面內量測視覺邊界後,以小數座標 `clip` 截圖;w-html2png 之介面為 `(width, height, scale, html, opt)` 之固定尺寸截圖,無 clip 與頁面內量測結果回傳,須先量測再以固定尺寸重繪、事後裁切,小數座標之 clip 截圖無法重現(推論,未實測改接).另 w-html2png 預設使用自帶之 Windows 專用 chrome.其 `opt.timeout`、`opt.onTrace`、retry 為本套件所無,屬可改善而非阻礙.
+- 現況判斷(待主控裁定):經 w-playwright 啟動 Chromium(R13)後直接以 Playwright 之 page API 渲染,不經 w-html2png.理由:本套件須於頁面內量測視覺邊界後,以小數座標 `clip` 截圖;w-html2png 之介面為 `(width, height, scale, html, opt)` 之固定尺寸截圖,無 clip 與頁面內量測結果回傳,須先量測再以固定尺寸重繪、事後裁切,小數座標之 clip 截圖無法重現(推論,未實測改接).另 w-html2png 預設使用自帶之 Windows 專用 chrome.其 `opt.timeout`、`opt.onTrace`、retry 為本套件所無,屬可改善而非阻礙.
 
 ## R11 建置、發布與 npm 範圍
 
-- 規則:`script.txt`、`toolg/` 依 dspec〈自有套件之發布與建置腳本〉A 型標準寫法,不自創;`script.txt` 由使用者維護,agent 不改.`toolg/gDistRollup.mjs` 之 `fns: 'WInfographic.mjs'`、`nameDistType: 'kebabCase'`、external 為 `playwright`、`sharp`、`@mdi/js`(Node 端執行期依賴,不打包).`.gitignore` 保留 `CLAUDE*.md`、不排除 `sgud`;不提供 `.npmignore`(`test/` 約 3.6MB,未達 dspec〈自有套件之npm發布範圍〉第 2 條之 10MB).`package.json` 之 scripts 只有 `test`、`deploy`.
+- 規則:`script.txt`、`toolg/` 依 dspec〈自有套件之發布與建置腳本〉A 型標準寫法,不自創;`script.txt` 由使用者維護,agent 不改.`toolg/gDistRollup.mjs` 之 `fns: 'WInfographic.mjs'`、`nameDistType: 'kebabCase'`、external(與 globals 同列)為 `@mdi/js`、`sharp`、`w-playwright`(Node 端執行期依賴,不打包;`w-playwright` 以其 main 外部化,不內嵌其 src,使 `playwright-core` 之精確版本由 w-playwright 持有).`.gitignore` 保留 `CLAUDE*.md`、不排除 `sgud`;不提供 `.npmignore`(`test/` 約 3.6MB,未達 dspec〈自有套件之npm發布範圍〉第 2 條之 10MB).`package.json` 之 scripts 只有 `test`、`deploy`.
 - 盤點:`ls toolg`(應為 addVersion、cleanFolder、gDistRollup、genDocsDist、modifyReadme 5 支);`git grep -n "external" -A5 -- toolg/gDistRollup.mjs`.
 - 判準:已套.
 
 ## R12 測試
 
-- 檔名前綴:一律 `unit-`(`test/*.test.mjs`).本套件無 HTTP/RPC 介面與使用者互動畫面,故無 `api-`、`e2e-`;測試於真瀏覽器載入各圖種產生之 HTML 做語意斷言(幾何、配色、逃逸),並以標準圖做補強.
+- 檔名前綴:一律 `unit-`(`test/*.test.mjs`).本套件無 HTTP/RPC 介面與使用者互動畫面,故無 `api-`、`e2e-`;測試於瀏覽器(headless shell,經 w-playwright 啟動;不啟動真 Chrome、Edge、完整 Chromium)載入各圖種產生之 HTML 做語意斷言(幾何、配色、逃逸),並以標準圖做補強.
 - 標準圖比對:pixelmatch 8(devDependencies `^8.0.0`,色差度量為 OKLab HyAB;7 為 YIQ,無選項可還原 7 之判定),選項 `{ threshold: 0.1, includeAA: false, checkerboard: true }`(單一擁有者 `test/tools/lib.mjs` 之 `pixelDiff`,`assertBaseline` 與 `unit-entry` 之「鑑別力」斷言共用),容差 `MAX_DIFF` 100 像素;不符時三聯組證據落 `./testPending/`(gitignore,不自動刪);臨時檔落 `test/_tmp/<案名>/`(目前無).
 - 比對度量改變之處置(7→8 於 2026-11-09 套用,6 張標準圖之當次輸出與標準圖位元組相同,0 張失敗、0 張重產):8 比 7 敏感之處為近黑區 16～31 級明度差、飽和色 16～31 級色偏,透明背景下半透明內容之真實改變 8 抓得到而 7 抓不到;每通道 ≤ 12 級之雜訊兩版皆計 0.日後升 pixelmatch 大版或改選項後若有標準圖失敗:暫裝舊版對照(`npm i --no-save pixelmatch7@npm:pixelmatch@7.2.0`,不寫入 `package.json`),兩版以同一組選項各算計數;舊版計數 ≤ 容差 < 新版計數者為「只因度量而失敗」之候選,須逐張目視確認畫面內容未改變,才可 `UPDATE_BASELINE=1` 搭配 `--grep <案名>` 定點重產該張;兩版皆超容差者非度量所致,依一般流程查因,不得以重產處理;不放寬容差或 threshold、不整批重產(R2).
 - 每條斷言上方註明對應之規格句(各圖種模組檔頭、`WInfographic.mjs` JSDoc、本帳本).
 - p2 之測試需連 jsDelivr.
 - 「不需網路」之規格以 `requestsOf`(`test/tools/lib.mjs`)斷言:circles、hexagon、p1 色帶與卡片之頁面載入後不得有任何非 `data:`/`about:`/`blob:` 之請求(`unit-entry`),並以含外部圖片之頁面做對照確認偵測有效.
 - 標準圖比對失敗時,`./testPending/` 落 `capture` 與 `baseline`;兩圖尺寸相同才另有 `diff`.
-- 改動範圍 → 測試檔:`src/circles/**` → `unit-circles`;`src/hexagon/**` → `unit-hexagon`;`src/hierarchy/**` → `unit-hierarchy`;`src/common/normOpt.mjs`、`src/WInfographic.mjs` → `unit-opt`、`unit-entry`;`src/common/render.mjs`、`text.mjs`、`palette.mjs` → 全部.
-- 盤點:`git grep -c -E "^\s+it\(" -- test` 各檔案例數見 state(目前 circles 7、entry 9、hexagon 8、hierarchy 13、opt 6,共 43).
+- 改動範圍 → 測試檔:`src/circles/**` → `unit-circles`;`src/hexagon/**` → `unit-hexagon`;`src/hierarchy/**` → `unit-hierarchy`;`src/common/normOpt.mjs`、`src/WInfographic.mjs` → `unit-opt`、`unit-entry`;`src/common/render.mjs`、`text.mjs`、`palette.mjs`、`test/tools/lib.mjs` → 全部;`src/hierarchy/p2/gen.mjs` → `unit-hierarchy`、`unit-wpwWiring`;`package.json`、`toolg/gDistRollup.mjs` → `unit-wpwWiring`.
+- 盤點:`git grep -c -E "^\s+it\(" -- test` 各檔案例數見 state(目前 circles 7、entry 9、hexagon 8、hierarchy 13、opt 6、wpwWiring 6,共 49).
 - 變異驗證:改動 `src` 後以副本植入單一文字替換、只跑對應之測試檔,測試須有失敗;植入點須先確認存在且唯一.已驗之植入類別:幾何(startAngle 套用、槽位順序、每側上限)、配色(`colorOf`、`clsOf` 取原型鏈成員)、裁切(`TRIM_PAD`、clip 左緣、p2 補白)、逃逸(`<`、`&`)、分派(mode 對調)、預設值與非預期值(`normOpt` 各鍵)、圖示後備、輸入檢核(notes、items)、p2 載入檢查、逾時參數位置、JSON 嵌入之 `<` 轉義.
+
+## R13 Chromium 啟動一律經 w-playwright
+
+- 規則(對應 w-playwright 規則帳本之 R-PW-ONLY、R-PW-WIRING,由主控統一盤點):(a)`src`、`test`、`toolg` 之 `.mjs`/`.js` 不得以靜態匯入、動態 `import()`、`require` 引用 `playwright`、`playwright-core`;啟動一律 `wpw.launchChromium()`(`import wpw from 'w-playwright'`,不深層匯入其 `src`);(b)`package.json` 不宣告 `playwright`、`playwright-core`,`dependencies` 宣告 `w-playwright`(`^1.0.1`);(c)`toolg/gDistRollup.mjs` 之 globals、external 列 `w-playwright`、不列 `playwright`;(d)本套件只用無頭之 headless shell(`wpw.launchChromium()` 不給 `channel`、`headless`),不啟動真 Chrome、Edge、完整 Chromium——需要時另議並依 w-playwright 之驗證狀態與登入守門辦理;(e)測試以 `wpw.setBrowserTypeForTest` 斷言每個啟動點送出之選項含守門(恰一個 `--disable-features`、為 `args` 最後一個元素、含 `AutofillAiWalletPrivatePasses`),並斷言替身確被呼叫.
+- 站點全集(啟動點):`src/common/render.mjs` 之 `renderTrimmed`(circles、hexagon、hierarchy p1 共用)、`src/hierarchy/p2/gen.mjs` 之 `gen`,共 2 處(`git grep -n "wpw\.launchChromium" -- src`);測試共用層 `test/tools/lib.mjs` 之 `withPage`、`requestsOf`,共 2 處.
+- 盤點(命中須為 0,於套件根執行;防空集合:同指令對 w-playwright 之 `src/_pw.mjs` 須有命中):`rg -n --glob '*.{mjs,js}' --glob '!**/node_modules/**' --glob '!**/dist/**' "(from\s+|import\(\s*|require\(\s*)['\"\`]playwright(-core)?['\"\`/]" .`;`git grep -n -E "playwright" -- package.json` 應只剩 `w-playwright` 一行.
+- 判準:已套(2 處 src 啟動點、2 處測試共用層啟動點,逐點接線案齊全;修前紅:未改前 3 個接線案皆因替身 0 次呼叫而失敗,2 個靜態案因仍匯入 `playwright` 而失敗).
+- 行為變更(README 已載):受管瀏覽器未安裝時 reject 帶 `code`(`E_BROWSER_MISSING`),不再是 Playwright 原文;啟動失敗之錯誤為固定詞彙(不含命令列);`PWDEBUG` 為 inspector 模式之值或 `SELENIUM_REMOTE_URL` 有值時拒絕(`E_ENV`).命令列多一個合併之 `--disable-features`(Playwright 預設清單加 `AutofillAiWalletPrivatePasses`),渲染結果不變(6 張標準圖 0 張改變).
+- 測試:`test/unit-wpwWiring.test.mjs`.

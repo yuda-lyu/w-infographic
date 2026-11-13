@@ -2,7 +2,7 @@ import assert from 'assert'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { chromium } from 'playwright'
+import wpw from 'w-playwright'
 import pixelmatch from 'pixelmatch'
 import { PNG } from 'pngjs'
 import { measure, TRIM_PAD } from '../../src/common/render.mjs'
@@ -58,7 +58,7 @@ function assertBaseline(buf, name) {
 
 // withPage: 於真瀏覽器載入 html 後執行 fn(page)
 async function withPage(html, fn, opt = {}) {
-    let browser = await chromium.launch()
+    let browser = await wpw.launchChromium() // 一律經 w-playwright 啟動(headless shell; 本層不啟動真 Chrome、Edge、完整 Chromium)
     try {
         let page = await browser.newPage({ viewport: { width: 4000, height: 3000 } })
         await page.setContent(html, { waitUntil: opt.waitUntil || 'load' })
@@ -75,7 +75,7 @@ async function withPage(html, fn, opt = {}) {
 
 // requestsOf: 於真瀏覽器載入 html(等載入完成與字型就緒), 回傳頁面發出之網路請求網址(不含 data:、about:、blob:)
 async function requestsOf(html) {
-    let browser = await chromium.launch()
+    let browser = await wpw.launchChromium()
     try {
         let page = await browser.newPage()
         let urls = []

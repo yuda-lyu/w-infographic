@@ -1,5 +1,5 @@
 /* global d3 */
-import { chromium } from 'playwright'
+import wpw from 'w-playwright'
 import sharp from 'sharp'
 import { gboxHtml, leadHtml, nodeBoxCss, LINE } from '../nodeBox.mjs'
 
@@ -120,7 +120,7 @@ async function waitReady(page, timeout = 15000) {
 // gen: hooks.onPage(page) 為測試用接縫, 於頁面建立後、載入 html 前呼叫(供注入網路失敗等情境), 一般呼叫不給
 async function gen(inp, opt, hooks = {}) {
     let html = buildHtml(inp, opt)
-    let browser = await chromium.launch()
+    let browser = await wpw.launchChromium() // 經 w-playwright 啟動(無頭 headless shell, 一律加入其守門參數)
     let buf
     try {
         let page = await browser.newPage({ deviceScaleFactor: 2 }) // 2x 提高清晰度
