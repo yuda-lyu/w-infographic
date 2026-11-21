@@ -1,17 +1,17 @@
 {
   "name": "w-infographic",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "main": "dist/w-infographic.umd.js",
   "dependencies": {
     "@mdi/js": "^7.4.47",
     "sharp": "^0.35.5",
-    "w-playwright": "^1.0.1",
-    "wsemi": "^1.9.70"
+    "w-playwright": "^1.0.2",
+    "wsemi": "^1.9.71"
   },
   "devDependencies": {
     "pixelmatch": "^8.0.0",
     "pngjs": "^7.0.0",
-    "w-package-tools": "^1.1.28"
+    "w-package-tools": "^1.1.29"
   },
   "scripts": {
     "test": "mocha --no-parallel \"test/*.test.mjs\" --timeout 180000",
