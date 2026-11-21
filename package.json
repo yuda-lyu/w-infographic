@@ -1,11 +1,11 @@
 {
   "name": "w-infographic",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "main": "dist/w-infographic.umd.js",
   "dependencies": {
     "@mdi/js": "^7.4.47",
     "sharp": "^0.35.5",
-    "w-playwright": "^1.0.2",
+    "w-playwright": "^1.0.3",
     "wsemi": "^1.9.71"
   },
   "devDependencies": {
