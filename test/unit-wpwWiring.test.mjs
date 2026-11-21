@@ -139,7 +139,11 @@ describe('Chromium 啟動經 w-playwright', function() {
             assert.strictEqual(pkg[k] && pkg[k].playwright, undefined, `${k} 不得宣告 playwright`)
             assert.strictEqual(pkg[k] && pkg[k]['playwright-core'], undefined, `${k} 不得宣告 playwright-core`)
         }
-        assert.ok(/^\^1\.0\.1$/.test(pkg.dependencies['w-playwright']), 'dependencies 須宣告 w-playwright ^1.0.1')
+        //以數值比較下限, 不以字面正則(字面 ^1.0.1 於 2026-11-21 連動升為 ^1.0.2 時失效)
+        let m = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(pkg.dependencies['w-playwright'] || '')
+        assert.ok(m, 'dependencies 須以 ^x.y.z 宣告 w-playwright: ' + pkg.dependencies['w-playwright'])
+        let [a, b, c] = m.slice(1).map(Number)
+        assert.ok(a > 1 || (a === 1 && (b > 0 || c >= 1)), 'dependencies 須宣告 w-playwright ^1.0.1 以上: ' + pkg.dependencies['w-playwright'])
     })
 
     // 規格: 建置時 w-playwright 須外部化(不打包進 dist, 否則使用端可解析 playwright-core 之精確釘版被繞開)

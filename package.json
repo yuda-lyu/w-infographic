@@ -1,6 +1,6 @@
 {
   "name": "w-infographic",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "main": "dist/w-infographic.umd.js",
   "dependencies": {
     "@mdi/js": "^7.4.47",
