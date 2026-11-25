@@ -3,11 +3,14 @@ import WInfographic from '../src/WInfographic.mjs'
 import { buildHtml, SELECTOR } from '../src/hexagon/gen.mjs'
 import { assertBaseline, assertTrimmed, withPage, rectsOf } from './tools/lib.mjs'
 import { hexagonInp, hexagonRightInp } from './tools/data.mjs'
+import { useCdnGuard } from './tools/cdn.mjs'
 
 const ROW_H = 1.5 * 125 * 1.07 // 鏈一列之垂直距
 
 // 規格來源: src/hexagon/gen.mjs 檔頭
 describe('hexagon 六邊形資訊圖', function() {
+
+    useCdnGuard()
 
     // 規格: 全未指定 side 時, 前 ceil(n/2) 項為左欄、其餘為右欄, 各欄由上而下
     it('預設左右欄分派與項目順序', async function() {

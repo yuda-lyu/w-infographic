@@ -6,6 +6,7 @@ import wpw from 'w-playwright'
 import pixelmatch from 'pixelmatch'
 import { PNG } from 'pngjs'
 import { measure, TRIM_PAD } from '../../src/common/render.mjs'
+import { cdn } from './cdn.mjs'
 
 // 測試共用層: 像素比對(反鋸齒容差, 補強層)、於真瀏覽器載入 buildHtml 之頁面供語意斷言
 
@@ -58,8 +59,9 @@ function assertBaseline(buf, name) {
 
 // withPage: 於真瀏覽器載入 html 後執行 fn(page)
 async function withPage(html, fn, opt = {}) {
-    let browser = await wpw.launchChromium() // 一律經 w-playwright 啟動(headless shell; 本層不啟動真 Chrome、Edge、完整 Chromium)
+    let browser = await wpw.launchChromium() // 一律經 w-playwright 啟動(headless shell; 本層不啟動真 Chrome、Edge、完整 Chromium); 經 cdn.mjs 之單一啟動出口掛 CDN 本地副本路由
     try {
+        assert.ok(cdn.isRouted(browser), 'withPage 啟動之瀏覽器未掛 CDN 本地副本路由(漏接)')
         let page = await browser.newPage({ viewport: { width: 4000, height: 3000 } })
         await page.setContent(html, { waitUntil: opt.waitUntil || 'load' })
         await page.evaluate(() => document.fonts.ready)
@@ -77,6 +79,7 @@ async function withPage(html, fn, opt = {}) {
 async function requestsOf(html) {
     let browser = await wpw.launchChromium()
     try {
+        assert.ok(cdn.isRouted(browser), 'requestsOf 啟動之瀏覽器未掛 CDN 本地副本路由(漏接)')
         let page = await browser.newPage()
         let urls = []
         page.on('request', (r) => {

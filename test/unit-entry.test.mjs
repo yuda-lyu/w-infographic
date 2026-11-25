@@ -1,13 +1,17 @@
 import assert from 'assert'
+import http from 'http'
 import WInfographic from '../src/WInfographic.mjs'
 import { buildHtml as buildCircles } from '../src/circles/gen.mjs'
 import { buildHtml as buildHexagon } from '../src/hexagon/gen.mjs'
 import { buildHtml as buildP1 } from '../src/hierarchy/p1/gen.mjs'
 import { isPng, pixelDiff, requestsOf, MAX_DIFF } from './tools/lib.mjs'
 import { circlesInp, hexagonInp, treeBandInp, treeCardInp } from './tools/data.mjs'
+import { useCdnGuard } from './tools/cdn.mjs'
 
 // 規格來源: src/WInfographic.mjs 之 JSDoc
 describe('WInfographic 入口', function() {
+
+    useCdnGuard()
 
     // 規格: opt.type 必給, 可選 circles、hexagon、hierarchy
     it('opt.type 未給或非可選值時拋錯', async function() {
@@ -90,7 +94,25 @@ describe('WInfographic 入口', function() {
         for (let [k, html] of Object.entries(pages)) {
             assert.deepStrictEqual(await requestsOf(html), [], `${k} 不應發出網路請求`)
         }
-        assert.strictEqual((await requestsOf('<img src="https://example.invalid/x.png">')).length, 1, '對照組應偵測到 1 個請求')
+        // 對照組: 測試端不連外部網址(清單外之外部請求會被 CDN 本地副本之路由中止並使測試失敗), 故以本機伺服器(listen(0), 回送位址不屬外部請求而放行)供應 1 像素圖片, 偵測有效者應見 1 個請求
+        let gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
+        let srv = http.createServer((req, res) => {
+            res.writeHead(200, { 'content-type': 'image/gif' })
+            res.end(gif)
+        })
+        await new Promise((resolve) => srv.listen(0, '127.0.0.1', resolve))
+        let port = srv.address().port
+        try {
+            let urls = await requestsOf(`<img src="http://127.0.0.1:${port}/x.gif">`)
+            assert.strictEqual(urls.length, 1, '對照組應偵測到 1 個請求')
+        }
+        finally {
+            srv.closeAllConnections()
+            await new Promise((resolve) => srv.close(resolve))
+        }
+        // 對照組(失敗之請求亦須被偵測; 原對照組用不可解析之外部網址, 請求失敗而無回應): 已關閉之回送位址埠, 請求發出但連線被拒、無回應, 偵測有效者仍應見 1 個請求
+        let closed = await requestsOf(`<img src="http://127.0.0.1:${port}/x.gif">`)
+        assert.strictEqual(closed.length, 1, '連線失敗之請求亦應被偵測')
     })
 
     // 規格: 項目(節點)數之下限為 1; 單項之 circles、hexagon 與僅根節點之 hierarchy p1 皆可出圖

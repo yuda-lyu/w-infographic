@@ -4,11 +4,14 @@ import { buildHtml, SELECTOR } from '../src/circles/gen.mjs'
 import { PALETTE } from '../src/common/palette.mjs'
 import { assertBaseline, assertTrimmed, withPage, rectsOf } from './tools/lib.mjs'
 import { rawIcon, circlesInp } from './tools/data.mjs'
+import { useCdnGuard } from './tools/cdn.mjs'
 
 const R = 276 // 佈局半徑 = 中心圓半徑 150 + 間距 26 + 外圓半徑 100
 
 // 規格來源: src/circles/gen.mjs 檔頭
 describe('circles 圓形放射圖', function() {
+
+    useCdnGuard()
 
     // 規格: 環形均布; startAngle 為首個外圓之角度, 順時針遞增
     it('外圓依 startAngle 起順時針均布於環上', async function() {

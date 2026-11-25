@@ -27,6 +27,19 @@
 - `npm uninstall playwright` 與 `npm i w-playwright` 會再度把 `package-lock.json` 頂層 `version` 兩處同步為 `package.json` 之版號,並在 `package.json` 檔尾補換行;事後以 `git diff` 還原這些非必要改動(與前述 `npm install --save-dev` 同現象).
 - dist 之驗證:不在原地建置(`dist` 為入版控之發布產物);複製 `src`、`toolg`、`babel.config.js`、`package.json` 至 `./tmp/<夾>/distcopy/`,以 `quiet-run --cwd` 指向副本執行 `node toolg/gDistRollup.mjs`;副本位於 repo 內 `tmp` 下,Node 向上找到 repo 之 `node_modules`,不需目錄連結.dist 中 `require("w-playwright")`、`require("sharp")`、`require("@mdi/js")` 三個外部依賴,無 `playwright`;以 `createRequire` 載入 UMD、`w-playwright` 之預設匯出(物件)經 rollup 互通後可直接 `wpw.launchChromium()`.
 
+## 測試不連 CDN(2026-11-25,規則帳本 R14)
+
+- `wpw.setBrowserTypeForTest` 之替身堆疊:頂端替身呼叫 `next()` 直達真 BrowserType,**不經堆疊中下一層**.故全域出口(`test/tools/cdn.mjs` 載入時設)之上若再疊測試自設之替身(如 `unit-wpwWiring`),其以 `next()` 啟動之瀏覽器不會被掛路由;須改呼叫 `launchRouted(next)`.測試共用層以 `cdn.isRouted(browser)` 斷言,漏接即拋「漏接」.
+- 服務端回應不帶快取標頭時,Chromium 對 `d3-flextree`、`d3-org-chart` 各請求 2 次(`d3` 1 次),一次 p2 頁面載入 `served` 計 5 而非 3;斷言以「供應之網址集合 ＝ 清單」為準,不斷言次數.
+- Playwright 之 route 順序:頁面層(`page.route`)先於 context 層(CDN 本地副本之路由掛在 context),同層後註冊者先執行.測試自設之 route 對不處理之請求用 `fallback()` 交給 CDN 本地副本之路由;`continue()` 直連真網.線上時觀察者只記清單外之請求,清單內之網址被 `continue()` 放走**不被記為違規**,故此類回歸只有斷網情境才現形(驗收須含斷網:預載使 Chromium 以 `--host-resolver-rules=MAP * ~NOTFOUND` 對所有主機名稱無法解析,修前紅/修後綠皆以此為準),線上另以 `unit-cdnLocal` 之掃描案把關(`continue`、`fetch`、`APIRequestContext` 之直連).
+- 斷網預載以 `NODE_OPTIONS=--import=<file URL>` 套在 mocha 行程;`quiet-run` 會繼承該變數(沙箱解析守門曾把 `quiet-run.mjs` 自己擋下),故預載或守門只套在 mocha 子行程,以小啟動器(spawn mocha 並設 `env`)包起來,`quiet-run` 之指令為 `node <啟動器> <沙箱根> <mocha 參數>`.啟動器內取自身目錄用 `fileURLToPath(import.meta.url)`,不用 `new URL(...).pathname`(含中文之路徑會成百分比編碼而找不到檔).
+- 對照組不可用外部網址(會被中止並使測試失敗):`unit-entry` 之「偵測有效」對照改用本機伺服器(`listen(0, '127.0.0.1')`,回送位址放行),結束時 `closeAllConnections()` 再 `close()`.
+- mocha 之 `afterEach` 失敗會中止同一 suite 之後續案,違規時只看到第一案失敗;訊息為 `createCdnLocal: 自標記起有 N 筆未列入 CDN 本地對照表之外部請求: <網址>`(不含錯誤碼字串,以訊息比對).
+- 快取缺且離線時之影響範圍:取得放在需要 p2 繪圖庫之巢狀 describe 之 `before`(`unit-hierarchy` 之 p2、`unit-cdnLocal` 之〈需本地副本者〉),失敗只波及這兩處(共 9 案不執行),其餘 49 案不受影響(靜態之掃描與對照案不放在其下;曾把 `useCdnEnsure()` 放在 `unit-cdnLocal` 之最外層,離線且快取為空時連靜態案都不跑,經獨立複審指出後改);不把 `ensure()` 放在每個 describe,否則缺快取之離線首跑會使不需 CDN 之 circles、hexagon 等整批失敗.
+- 測試內以子 mocha 行程驗 `useCdnGuard`(夾具寫於 `test/_tmp/cdnLocal-<pid>/`,測完刪;子行程加 `timeout`、`setEncoding('utf8')`):定位 mocha 以 `createRequire(import.meta.url).resolve('mocha/package.json')`,在鏡像(變異用複本)與發布包沙箱皆可;寫死 `../node_modules/mocha` 於鏡像會失敗(曾使變異結果多一個與變異無關之失敗).
+- 變異驗證測試端接線:鏡像根(`./tmp/<案名>/mut/w`,複本不建連結)植入單點、只跑相關檔;19 個單點缺陷全數轉紅(清單見規則帳本 R14);變異之錨點須恰出現 1 次(0 或多次即報錯,不靜默略過),改測試檔後錨點常失效(曾因對照組改寫而報錯),須同步更新.掃描型測試(以檔案文字比對)要防自己被命中:正則以拼接字串組成,註解內不寫會被命中之字樣(如 `next(`、`.continue(`),另對掃描範圍設下限並附正反對照以防空集合.
+- `w-package-tools-e2e` 依賴 `wsemi ^1.9.75`,本套件 `npm i -D` 後 `package-lock.json` 之 `wsemi` 由 1.9.74 連帶升至 1.9.75(`package.json` 之範圍 `^1.9.74` 不變);同樣會把 lock 頂層 `version` 同步為 `package.json` 之版號並於 `package.json` 檔尾補換行,事後須還原(同前文).
+
 ## 環境
 
 - Git Bash 之 `tar -xzf C:/路徑` 會把 `C:` 當遠端主機而失敗;改用 `/c/路徑`.

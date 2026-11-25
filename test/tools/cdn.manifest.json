@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "note": "由 genCdnManifest 依根網址產生; 網址或版本改變後須重新產生; sha256 為首次取得時之釘選值",
+  "roots": {
+    "https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js": "https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js",
+    "https://cdn.jsdelivr.net/npm/d3-flextree@2.1.2/build/d3-flextree.js": "https://cdn.jsdelivr.net/npm/d3-flextree@2.1.2/build/d3-flextree.js",
+    "https://cdn.jsdelivr.net/npm/d3-org-chart@3.1.1/build/d3-org-chart.js": "https://cdn.jsdelivr.net/npm/d3-org-chart@3.1.1/build/d3-org-chart.js"
+  },
+  "files": {
+    "https://cdn.jsdelivr.net/npm/d3-flextree@2.1.2/build/d3-flextree.js": {
+      "sha256": "e4cd9feea0d126fd4839c39fb3526fb5806173e20e486ef703171e7803dd9d75",
+      "size": 23184
+    },
+    "https://cdn.jsdelivr.net/npm/d3-org-chart@3.1.1/build/d3-org-chart.js": {
+      "sha256": "f001ddfe4cea52c388bede75bf30195eff032260f80fcda8770e6793e415f351",
+      "size": 96005
+    },
+    "https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js": {
+      "sha256": "f2094bbf6141b359722c4fe454eb6c4b0f0e42cc10cc7af921fc158fceb86539",
+      "size": 279706
+    }
+  }
+}

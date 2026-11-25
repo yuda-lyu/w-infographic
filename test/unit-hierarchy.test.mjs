@@ -4,6 +4,7 @@ import { buildHtml as buildP1, SELECTOR } from '../src/hierarchy/p1/gen.mjs'
 import { buildHtml as buildP2, gen as genP2, waitReady } from '../src/hierarchy/p2/gen.mjs'
 import { isPng, assertBaseline, assertTrimmed, withPage, rectsOf, inkMargins } from './tools/lib.mjs'
 import { treeBandInp, treeCardInp, treeP2Inp } from './tools/data.mjs'
+import { useCdnGuard, useCdnEnsure } from './tools/cdn.mjs'
 
 const P2_OPT = { nodeWidth: 226, width: 680, height: 880, compact: true }
 
@@ -15,6 +16,8 @@ const overlaps = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a
 
 // 規格來源: src/hierarchy/nodeBox.mjs、p1/gen.mjs、p2/gen.mjs 檔頭
 describe('hierarchy 層級樹', function() {
+
+    useCdnGuard() // 每案前後夾 violationMark、assertNoViolation: 清單外之外部請求使該案失敗
 
     // 規格: children 遞迴巢狀; 子節點依序由左至右, 位於父節點下方
     it('p1 節點結構與上下左右關係', async function() {
@@ -104,42 +107,6 @@ describe('hierarchy 層級樹', function() {
         })
     })
 
-    // 規格: p2 自動 fit 進固定畫布; 節點不重疊; 估算之節點高足以容納內容(不遭裁切); compact 收摺省寬
-    it('p2 節點不重疊、內容不遭裁切、compact 較窄', async function() {
-        let measure = async (opt) => await withPage(buildP2(treeP2Inp, opt), async (page) => {
-            let boxes = await rectsOf(page, '.gbox')
-            let clipped = await page.evaluate(() => [...document.querySelectorAll('.gbox')].filter((b) => {
-                let fo = b.closest('foreignObject')
-                return b.scrollHeight > Number(fo.getAttribute('height'))
-            }).length)
-            return { boxes, clipped }
-        }, p2Page)
-        let compact = await measure(P2_OPT)
-        let wide = await measure({ nodeWidth: 196, width: 1300, height: 640, compact: false })
-        for (let r of [compact, wide]) {
-            assert.strictEqual(r.boxes.length, 7)
-            assert.strictEqual(r.clipped, 0, '節點內容遭裁切')
-            for (let i = 0; i < r.boxes.length; i++) {
-                for (let j = i + 1; j < r.boxes.length; j++) {
-                    assert.ok(!overlaps(r.boxes[i], r.boxes[j]), `節點 ${i}、${j} 重疊`)
-                }
-            }
-        }
-        let cols = (r) => new Set(r.boxes.map((b) => Math.round(b.cx / 5))).size
-        assert.ok(cols(compact) < cols(wide), `compact 欄數 ${cols(compact)} 應少於一般 ${cols(wide)}`)
-    })
-
-    // 規格: p2 成品裁去畫布留白後四邊補回等寬白邊(24 像素)
-    it('p2 成品四邊留白一致', async function() {
-        let buf = await WInfographic(treeP2Inp, { type: 'hierarchy', mode: 'p2', ...P2_OPT })
-        let m = inkMargins(buf)
-        for (let k of ['left', 'right', 'top', 'bottom']) {
-            assert.ok(m[k] >= 24 && m[k] <= 32, `${k} 留白 ${m[k]}`)
-        }
-        // 預期畫面: 深色根節點「門市營運」, 七個子節點收摺為兩欄, 各節點含圖示、標題與條列(或說明)
-        assertBaseline(buf, 'hierarchy-p2-compact')
-    })
-
     // 預期畫面: 根節點「總經理/營運總部」, 第二層三盒(研發、業務、行政), 研發部下有前端、後端兩盒; 灰色連接線相連; 行政部僅色帶
     it('p1 色帶版式之成品與標準圖', async function() {
         let buf = await WInfographic(treeBandInp, { type: 'hierarchy' })
@@ -153,60 +120,104 @@ describe('hierarchy 層級樹', function() {
         assertBaseline(buf, 'hierarchy-p1-card')
     })
 
-    // 規格: p2 由 jsDelivr 載入繪圖庫; 無法載入時拋明確錯誤(指出缺哪個庫與來源), 不得無聲產出空白圖, 失敗後瀏覽器已關閉
-    it('p2 無法載入繪圖庫時拋明確錯誤並關閉瀏覽器', async function() {
-        let defOpt = { nodeWidth: 196, width: 1300, height: 640, compact: false }
-        let run = async (handler) => {
-            let browser
-            let err = await genP2(treeP2Inp, defOpt, {
-                onPage: async (page) => {
-                    browser = page.context().browser()
-                    await page.route(/cdn\.jsdelivr\.net/, handler)
-                },
-            }).then(() => null, (e) => e)
-            assert.ok(err instanceof Error, '應拋錯而非產出圖')
-            assert.strictEqual(browser.isConnected(), false, '失敗後應關閉瀏覽器')
-            return err.message
-        }
-        // 全部無法連線(離線、DNS 失敗、被阻擋)
-        let all = await run((r) => r.abort())
-        assert.ok(all.includes('無法載入繪圖庫 d3、d3-flextree、d3-org-chart') && all.includes('jsDelivr'), all)
-        // 單一繪圖庫失敗(CDN 回應錯誤或被阻擋): 只指出缺者
-        let org = await run((r) => (r.request().url().includes('d3-org-chart') ? r.abort() : r.continue()))
-        assert.ok(org.includes('無法載入繪圖庫 d3-org-chart(') && !org.includes('d3-flextree'), org)
-        let flex = await run((r) => (r.request().url().includes('d3-flextree') ? r.fulfill({ status: 404, body: 'not found' }) : r.continue()))
-        assert.ok(flex.includes('d3-flextree') && !flex.includes('d3、'), flex)
-    })
+    // p2 之頁面載入 d3、d3-flextree、d3-org-chart 三個釘版 UMD: 測試端不連 CDN, 一律由 CDN 本地副本供應(test/tools/cdn.mjs; 首次執行須能連 jsDelivr 下載並校驗, 之後離線可跑)
+    describe('p2(d3-org-chart; 繪圖庫由 CDN 本地副本供應)', function() {
 
-    // 規格: p2 引擎未於限時內完成繪製即拋錯; 逾時值須實際套用於等待(page.waitForFunction 之逾時為第三參數, 置於第二參數不生效而用預設 30 秒)
-    it('p2 等待繪製完成之逾時值生效', async function() {
-        // 繪圖庫已載入但引擎未完成繪製(window.__done 不為 true)之頁面
-        await withPage('<!doctype html><html><body></body></html>', async (page) => {
-            await page.evaluate(() => {
-                window.d3 = { flextree: () => 0, OrgChart: () => 0 }
-            })
-            await assert.rejects(() => waitReady(page, 1200), /Timeout 1200ms/)
+        useCdnEnsure()
+
+        // 規格: p2 自動 fit 進固定畫布; 節點不重疊; 估算之節點高足以容納內容(不遭裁切); compact 收摺省寬
+        it('p2 節點不重疊、內容不遭裁切、compact 較窄', async function() {
+            let measure = async (opt) => await withPage(buildP2(treeP2Inp, opt), async (page) => {
+                let boxes = await rectsOf(page, '.gbox')
+                let clipped = await page.evaluate(() => [...document.querySelectorAll('.gbox')].filter((b) => {
+                    let fo = b.closest('foreignObject')
+                    return b.scrollHeight > Number(fo.getAttribute('height'))
+                }).length)
+                return { boxes, clipped }
+            }, p2Page)
+            let compact = await measure(P2_OPT)
+            let wide = await measure({ nodeWidth: 196, width: 1300, height: 640, compact: false })
+            for (let r of [compact, wide]) {
+                assert.strictEqual(r.boxes.length, 7)
+                assert.strictEqual(r.clipped, 0, '節點內容遭裁切')
+                for (let i = 0; i < r.boxes.length; i++) {
+                    for (let j = i + 1; j < r.boxes.length; j++) {
+                        assert.ok(!overlaps(r.boxes[i], r.boxes[j]), `節點 ${i}、${j} 重疊`)
+                    }
+                }
+            }
+            let cols = (r) => new Set(r.boxes.map((b) => Math.round(b.cx / 5))).size
+            assert.ok(cols(compact) < cols(wide), `compact 欄數 ${cols(compact)} 應少於一般 ${cols(wide)}`)
         })
-    })
 
-    // 規格: 層級樹資料以 JSON 嵌入頁面腳本; 圖示之 raw SVG 內含 </script> 時不得提早結束腳本而使頁面失效
-    it('p2 圖示內含 </script> 不破壞頁面', async function() {
-        let icon = '<svg viewBox="0 0 24 24"><title>a</script><b>x</b></title><rect width="24" height="24"/></svg>'
-        let inp = { tree: { title: 'r', children: [{ title: 'A', icon }] } }
-        await withPage(buildP2(inp, { nodeWidth: 196, width: 1300, height: 640, compact: false }), async (page) => {
-            let boxes = await rectsOf(page, '.gbox')
-            assert.strictEqual(boxes.length, 1)
-        }, p2Page)
-    })
+        // 規格: p2 成品裁去畫布留白後四邊補回等寬白邊(24 像素)
+        it('p2 成品四邊留白一致', async function() {
+            let buf = await WInfographic(treeP2Inp, { type: 'hierarchy', mode: 'p2', ...P2_OPT })
+            let m = inkMargins(buf)
+            for (let k of ['left', 'right', 'top', 'bottom']) {
+                assert.ok(m[k] >= 24 && m[k] <= 32, `${k} 留白 ${m[k]}`)
+            }
+            // 預期畫面: 深色根節點「門市營運」, 七個子節點收摺為兩欄, 各節點含圖示、標題與條列(或說明)
+            assertBaseline(buf, 'hierarchy-p2-compact')
+        })
 
-    // 規格: 層級樹僅根節點(無 children)亦可出圖, p2 成品四邊留白一致
-    it('p2 僅根節點可出圖', async function() {
-        let buf = await WInfographic({ tree: { title: '單一節點' } }, { type: 'hierarchy', mode: 'p2' })
-        assert.ok(isPng(buf))
-        let m = inkMargins(buf)
-        for (let k of ['left', 'right', 'top', 'bottom']) {
-            assert.ok(m[k] >= 24 && m[k] <= 32, `${k} 留白 ${m[k]}`)
-        }
+        // 規格: p2 由 jsDelivr 載入繪圖庫; 無法載入時拋明確錯誤(指出缺哪個庫與來源), 不得無聲產出空白圖, 失敗後瀏覽器已關閉
+        it('p2 無法載入繪圖庫時拋明確錯誤並關閉瀏覽器', async function() {
+            let defOpt = { nodeWidth: 196, width: 1300, height: 640, compact: false }
+            let run = async (handler) => {
+                let browser
+                let err = await genP2(treeP2Inp, defOpt, {
+                    onPage: async (page) => {
+                        browser = page.context().browser()
+                        await page.route(/cdn\.jsdelivr\.net/, handler)
+                    },
+                }).then(() => null, (e) => e)
+                assert.ok(err instanceof Error, '應拋錯而非產出圖')
+                assert.strictEqual(browser.isConnected(), false, '失敗後應關閉瀏覽器')
+                return err.message
+            }
+            // 全部無法連線(離線、DNS 失敗、被阻擋)
+            let all = await run((r) => r.abort())
+            assert.ok(all.includes('無法載入繪圖庫 d3、d3-flextree、d3-org-chart') && all.includes('jsDelivr'), all)
+            // 單一繪圖庫失敗(CDN 回應錯誤或被阻擋): 只指出缺者
+            // 其餘請求以 fallback() 交給 CDN 本地副本之路由(本案之頁面層 route 先於 context 層之 CDN 路由執行; continue() 會繞過本地副本直連真網)
+            let org = await run((r) => (r.request().url().includes('d3-org-chart') ? r.abort() : r.fallback()))
+            assert.ok(org.includes('無法載入繪圖庫 d3-org-chart(') && !org.includes('d3-flextree'), org)
+            let flex = await run((r) => (r.request().url().includes('d3-flextree') ? r.fulfill({ status: 404, body: 'not found' }) : r.fallback()))
+            assert.ok(flex.includes('d3-flextree') && !flex.includes('d3、'), flex)
+        })
+
+        // 規格: p2 引擎未於限時內完成繪製即拋錯; 逾時值須實際套用於等待(page.waitForFunction 之逾時為第三參數, 置於第二參數不生效而用預設 30 秒)
+        it('p2 等待繪製完成之逾時值生效', async function() {
+            // 繪圖庫已載入但引擎未完成繪製(window.__done 不為 true)之頁面
+            await withPage('<!doctype html><html><body></body></html>', async (page) => {
+                await page.evaluate(() => {
+                    window.d3 = { flextree: () => 0, OrgChart: () => 0 }
+                })
+                await assert.rejects(() => waitReady(page, 1200), /Timeout 1200ms/)
+            })
+        })
+
+        // 規格: 層級樹資料以 JSON 嵌入頁面腳本; 圖示之 raw SVG 內含 </script> 時不得提早結束腳本而使頁面失效
+        it('p2 圖示內含 </script> 不破壞頁面', async function() {
+            let icon = '<svg viewBox="0 0 24 24"><title>a</script><b>x</b></title><rect width="24" height="24"/></svg>'
+            let inp = { tree: { title: 'r', children: [{ title: 'A', icon }] } }
+            await withPage(buildP2(inp, { nodeWidth: 196, width: 1300, height: 640, compact: false }), async (page) => {
+                let boxes = await rectsOf(page, '.gbox')
+                assert.strictEqual(boxes.length, 1)
+            }, p2Page)
+        })
+
+        // 規格: 層級樹僅根節點(無 children)亦可出圖, p2 成品四邊留白一致
+        it('p2 僅根節點可出圖', async function() {
+            let buf = await WInfographic({ tree: { title: '單一節點' } }, { type: 'hierarchy', mode: 'p2' })
+            assert.ok(isPng(buf))
+            let m = inkMargins(buf)
+            for (let k of ['left', 'right', 'top', 'bottom']) {
+                assert.ok(m[k] >= 24 && m[k] <= 32, `${k} 留白 ${m[k]}`)
+            }
+        })
+
     })
 
 })

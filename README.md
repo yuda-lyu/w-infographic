@@ -73,6 +73,7 @@ fs.writeFileSync('tree-p2.png', await WInfographic(tree, { type: 'hierarchy', mo
 - 產出 PNG Buffer,以 Chromium 渲染(經 w-playwright 啟動,見上〈瀏覽器(Chromium)之取得與啟動〉),解析度為 2 倍。圖內不畫圖名。
 - 圖內字型固定為微軟正黑體,須於 Windows 或已安裝該字型之環境產製。
 - hierarchy 之 p2 由 jsDelivr CDN 載入繪圖庫(版本精確鎖定),產製時須可連線;其餘不需網路。
+- 測試(`npm test`)之網路需求:測試不連 CDN——p2 頁面載入之三個繪圖庫改由本地副本供應(清單 `test/tools/cdn.manifest.json` 釘 sha256,快取於 `test/_cache/cdn`,不入版控);首次執行須能連 jsDelivr 下載並校驗,之後可離線執行(環境變數 `W_CDN_OFFLINE=1` 強制離線,快取缺檔即報錯並列出缺檔名);測試中清單以外之外部請求一律中止並使測試失敗。
 - icon 為 `'<svg'` 開頭之 raw SVG(原樣內嵌,內容由呼叫端負責)或 `'mdi:名稱'`(@mdi/js,kebab-case)。
 - 節點與項目之色票鍵為 blue、green、teal、orange、purple、red、gray;circles 另可給 `#rrggbb`。hexagon 之配色固定為左右欄兩主色系。
 - circles 與 hexagon 每項之 notes、hierarchy 節點之 items 須為陣列(可省略),非陣列即拋錯;hexagon 每側至多 5 項,總計至多 10 項。

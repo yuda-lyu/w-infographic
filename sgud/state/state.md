@@ -8,7 +8,8 @@
 - 最近一次驗證(2026-11-04):`npm test`(mocha `--no-parallel`,經測試鎖)43 passing、0 failing(`unit-circles` 7、`unit-entry` 9、`unit-hexagon` 8、`unit-hierarchy` 13、`unit-opt` 6),6 張標準圖逐一比對通過、`testPending` 無新增;`npm pack` 解開後獨立安裝(只用宣告之依賴)同為 43 passing;以 `dist` 載入之 UMD 出圖,6 張標準圖資料之輸出與標準圖位元組相同;植入 23 種單一錯誤之變異,測試皆抓到.eslint 0 error.
 - 標準圖比對度量(2026-11-09 起):pixelmatch 升至 8.0.0(`package.json` devDependencies `^8.0.0`,lock 釘 8.0.0),`test/tools/lib.mjs` 之 `pixelDiff` 選項為 `{ threshold: 0.1, includeAA: false, checkerboard: true }`,容差 `MAX_DIFF` 100 不變(規則帳本 R12).升版後 `npm test`(mocha `--no-parallel`,經測試鎖)43 passing、0 failing(`unit-circles` 7、`unit-entry` 9、`unit-hexagon` 8、`unit-hierarchy` 13、`unit-opt` 6),`testPending` 未產生;6 張標準圖之當次輸出與標準圖位元組相同(8 之差異計數皆 0、RGBA 差異像素皆 0),0 張重產.
 - 改經 w-playwright 啟動 Chromium 後(2026-11-13,規則帳本 R13):`npm test`(mocha `--no-parallel`,經測試鎖)49 passing、0 failing、0 pending(既有 43 + `unit-wpwWiring` 6);6 張標準圖 0 張改變、`testPending` 未產生、`git diff --stat -- test/pics` 無輸出;`node_modules/w-playwright` 為 1.0.1、`playwright-core` 為 1.64.1(精確,由 w-playwright 持有),`node_modules/playwright` 已不存在.以副本(`./tmp` 下,cwd 指向副本)建置之 dist 載入(`require`,`w-playwright` 外部化),5 張不連網之標準圖資料輸出與標準圖位元組相同(p2 另依測試之 pixelmatch 比對通過).錯誤密碼次數於測試前後皆 0(本套件只啟動 headless shell,不啟動真 Chrome、Edge、完整 Chromium).
-- p2 之測試需連 jsDelivr;其餘不需網路.
+- 測試不連 CDN 後(2026-11-25,規則帳本 R14):devDependency 加 `w-package-tools-e2e` `^1.0.51`(裝得 1.0.51;連帶 `package-lock.json` 之 `wsemi` 由 1.9.74 升至 1.9.75,`package.json` 之範圍不變);`npm test`(mocha `--no-parallel`,經測試鎖)**58 passing**、0 failing、0 pending(既有 49 + `unit-cdnLocal` 9);6 張標準圖 0 張改變、`git diff --stat -- test/pics` 無輸出;清空快取後全套每個網址只下載 1 次(`test/_cache/cdn/downloads.jsonl` 3 列、3 個相異網址、1 個行程;4 個行程同時首次取得:1 個取鎖下載、3 個等候);斷網情境(`W_CDN_OFFLINE=1`,Chromium 對所有主機名稱無法解析,快取已備妥)58 passing,修前同情境 44 passing、5 failing(p2 之 5 案);暖快取連跑 5 次全套皆 58 passing,`unit-cdnLocal` 連跑 20 次、`unit-hierarchy` 連跑 10 次皆全綠;`npm pack` 發布包解開、自建 `node_modules`、解析守門下全套 58 passing(快取為冷,下載 3 列);測試端接線之 19 個單點變異全數轉紅;eslint(`test`)0 問題.
+- 測試之網路需求:首次執行須能連 jsDelivr 下載並校驗 3 個繪圖庫(約 399 KB)至 `test/_cache/cdn`,之後可離線(`W_CDN_OFFLINE=1`);其餘測試不需網路.
 
 ## 功能現況
 
@@ -22,6 +23,7 @@
 | 視覺邊界裁切(四邊留白一致) | 完成 | R8 | `assertTrimmed`、`inkMargins` |
 | 建置與發布(`script.txt`、`toolg/`、JSDoc、dist) | 完成,依 dspec A 型標準寫法;`w-playwright` 為 external | R11 | 實跑 `jsdoc`、`gDistRollup`、`genDocsDist`;`unit-wpwWiring`(external 靜態斷言) |
 | Chromium 啟動經 w-playwright(2 處 src 啟動點、測試共用層 2 處;不直接依賴 playwright) | 完成;只用 headless shell | R13 | `unit-wpwWiring` |
+| 測試不連 CDN(p2 之 3 個釘版繪圖庫由本地副本供應;單一啟動出口;清單外之外部請求使測試失敗) | 完成;清單 `test/tools/cdn.manifest.json`,快取 `test/_cache/cdn`(不入版控);本庫無 Node 端外部 `fetch`,未呼叫 `patchFetch()` | R14 | `unit-cdnLocal`、`unit-hierarchy`、`unit-entry`、`unit-wpwWiring` |
 
 ## 已知缺口與待辦
 
@@ -29,6 +31,8 @@
 - 渲染方式維持經 w-playwright 啟動後直接以 Playwright 之 page API 渲染,是否改接 w-html2png 待主控裁定(規則帳本 R10).
 - 測試每次 `withPage`、`requestsOf` 皆啟動一次 headless shell(共約 30 次);headless shell 不觸發登入驗證,共用瀏覽器屬效能而非守門之需要,暫不改(w-playwright 設計 §5.2:headless shell 之共用為選做).- 圖內字型固定微軟正黑體,非 Windows 且未安裝該字型之環境會落到 sans-serif,可能缺字;未偵測字型是否存在.
 - p2 於連線被黑洞(封包丟棄)時為 Playwright 之 30 秒逾時原文訊息(規則帳本 R9 已知限制).
+- 清單之 sha256 與 jsDelivr 現行內容是否相同無自動測試(測試不連 CDN 之取捨);升版或發布前手動核對:`node node_modules/w-package-tools-e2e/tools/genCdnManifest.mjs --url <3 個網址,見 R14> --out test/tools/cdn.manifest.json --check`(需連網,不寫檔).
+- 清單內之網址被測試自設之 route 以 `continue()` 放走,共用函式不視為違規(線上不被偵測),本庫以 `unit-cdnLocal` 之掃描案把關(規則帳本 R14).
 - circles 之 `cls` 只收 `#rrggbb`(6 位十六進位);`#abc`、`#rrggbbaa` 等寫法視同未給,依序循環取色.
 
 ## 與標準圖
