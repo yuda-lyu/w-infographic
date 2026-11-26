@@ -10,7 +10,7 @@ import WInfographic from '../src/WInfographic.mjs'
 import { buildHtml as buildP2 } from '../src/hierarchy/p2/gen.mjs'
 import { withPage, requestsOf } from './tools/lib.mjs'
 import { circlesInp, treeP2Inp } from './tools/data.mjs'
-import { cdn, makeCdn, launchCount, servedUrls, useCdnGuard, useCdnEnsure, FP_MANIFEST } from './tools/cdn.mjs'
+import { cdn, makeCdn, launchCount, hookInstalled, withoutHook, servedUrls, useCdnGuard, useCdnEnsure, FP_MANIFEST } from './tools/cdn.mjs'
 
 const __dir = path.dirname(fileURLToPath(import.meta.url))
 const DIR_SRC = path.resolve(__dir, '../src')
@@ -49,16 +49,14 @@ describe('測試不連 CDN(createCdnLocal 之接線)', function() {
         }
     })
 
-    // 規格(R14): 會啟動瀏覽器之測試檔皆於行首呼叫 useCdnGuard(), 載入 p2 繪圖庫者另於行首呼叫 useCdnEnsure(); 測試檔自行設啟動替身者須用 launchRouted(next);
+    // 規格(R14): 會啟動瀏覽器之測試檔皆於行首呼叫 useCdnGuard(), 載入 p2 繪圖庫者另於行首呼叫 useCdnEnsure();
     //   站點全集自檔案系統掃(非手列), 新增測試檔漏接線即轉紅; 只認行首之呼叫(註解內之字樣不算), 以 file 為單位(同檔多個 describe 只呼叫一次者不在掃描範圍)
-    it('會啟動瀏覽器之測試檔皆接線 useCdnGuard、p2 者接線 useCdnEnsure、自設啟動替身者用 launchRouted', function() {
+    it('會啟動瀏覽器之測試檔皆接線 useCdnGuard、p2 者接線 useCdnEnsure', function() {
         let files = readTests()
         let reLaunch = /\b(WInfographic|withPage|requestsOf|launchChromium)\(/
         let reP2 = /\b(buildP2|genP2)\b|mode:\s*'p2'/
-        let reStub = /\bsetBrowserTypeForTest\(/
         let nLaunch = 0
         let nP2 = 0
-        let nStub = 0
         for (let [n, s] of files) {
             if (reLaunch.test(s)) {
                 nLaunch++
@@ -68,13 +66,46 @@ describe('測試不連 CDN(createCdnLocal 之接線)', function() {
                     assert.ok(/^\s*useCdnEnsure\(\)/m.test(s), `${n} 載入 p2 繪圖庫, 須呼叫 useCdnEnsure()`)
                 }
             }
-            if (reStub.test(s) && n !== 'unit-cdnLocal.test.mjs') { // 本檔之替身為刻意繞過出口或獨立實例之對照案
-                nStub++
-                assert.ok(/\blaunchRouted\(next/.test(s), `${n} 自設啟動替身, 須以 launchRouted(next) 啟動`)
-                assert.ok(!/\bnext\(/.test(s), `${n} 自設啟動替身不得直接呼叫 next(...)(會繞過單一啟動出口), 須以 launchRouted(next) 啟動`)
+        }
+        assert.ok(files.length >= 7 && nLaunch >= 6 && nP2 >= 2, `掃描範圍可能壞了(測試檔 ${files.length}、啟動瀏覽器者 ${nLaunch}、p2 者 ${nP2})`)
+    })
+
+    // 規格(R14 之 c): 單一啟動出口＝test/tools/cdn.mjs 以 w-playwright 之啟動後鉤子掛 cdn.routeBrowser, 註冊集中於該檔一處(鉤子已掛); 不再於載入時設全域啟動替身(替身為替換非疊放, 疊上去會使自設替身之 next() 繞過它);
+    //   測試檔不各自註冊鉤子(本檔之獨立實例案除外, 於該案內還原). 站點全集自檔案系統掃; 註解行不算, 正則與範例以拼接組成避免本檔被自己命中
+    it('出口鉤子已掛且註冊集中於 test/tools/cdn.mjs 一處、載入時不設全域啟動替身', function() {
+        let hookCall = new RegExp('\\bonBrowserCre' + 'ated\\b', 'g') // 程式碼行中任何提及之處皆算(不限接收者名稱、括號呼叫或索引寫法、解構別名)
+        let stubCall = new RegExp('\\bsetBrowserTypeFor' + 'Test\\b', 'g')
+        let codeOf = (s) => s.split('\n').filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l)).join('\n') // 去掉整行註解(行註解與區塊註解行)
+        let count = (re, s) => (codeOf(s).match(re) || []).length
+        let dirTools = path.join(__dir, 'tools')
+        let tools = fs.readdirSync(dirTools).filter((n) => /\.mjs$/.test(n)).map((n) => [`tools/${n}`, fs.readFileSync(path.join(dirTools, n), 'utf8')])
+        let tests = readTests()
+        assert.ok(tools.length >= 3 && tests.length >= 7, `掃描範圍可能壞了(tools ${tools.length}、測試檔 ${tests.length})`)
+        // 出口檔: 恰一處註冊, 其鉤子對瀏覽器掛主實例之路由, 載入時不設全域替身
+        let sCdn = tools.find(([n]) => n === 'tools/cdn.mjs')[1]
+        assert.strictEqual(count(hookCall, sCdn), 1, 'tools/cdn.mjs 須恰有一處註冊啟動後鉤子')
+        assert.ok(/\bcdn\.routeBrowser\(/.test(codeOf(sCdn)), '出口鉤子須對瀏覽器掛主實例之 cdn.routeBrowser')
+        // 其餘 test/tools 之檔不註冊鉤子、不設啟動替身(載入即設之全域替身會使測試自設之替身繞過出口)
+        for (let [n, s] of tools) {
+            assert.strictEqual(count(stubCall, s), 0, `${n} 不得設啟動替身`)
+            if (n !== 'tools/cdn.mjs') {
+                assert.strictEqual(count(hookCall, s), 0, `${n} 不得註冊啟動後鉤子(集中於 tools/cdn.mjs)`)
             }
         }
-        assert.ok(files.length >= 7 && nLaunch >= 6 && nP2 >= 2 && nStub >= 1, `掃描範圍可能壞了(測試檔 ${files.length}、啟動瀏覽器者 ${nLaunch}、p2 者 ${nP2}、自設替身者 ${nStub})`)
+        // 測試檔: 只有本檔之獨立實例案註冊(恰 1 處), 其餘不註冊
+        for (let [n, s] of tests) {
+            let expected = n === 'unit-cdnLocal.test.mjs' ? 1 : 0
+            assert.strictEqual(count(hookCall, s), expected, `${n} 註冊啟動後鉤子之處數須為 ${expected}(集中於 tools/cdn.mjs; 本檔之獨立實例案除外)`)
+        }
+        // 對照(防空集合): 正則抓得到各種註冊與替身寫法(直接呼叫、別名接收者、解構別名、括號索引)、抓不到註解行與同名前綴之他名
+        assert.strictEqual(count(hookCall, 'wpw.onBrowserCre' + 'ated(fn)'), 1)
+        assert.strictEqual(count(hookCall, 'w.onBrowserCre' + 'ated(fn)'), 1)
+        assert.strictEqual(count(hookCall, 'let { onBrowserCre' + 'ated: reg } = wpw'), 1)
+        assert.strictEqual(count(hookCall, 'wpw[\'onBrowserCre' + 'ated\'](fn)'), 1)
+        assert.strictEqual(count(stubCall, 'wpw.setBrowserTypeFor' + 'Test({})'), 1)
+        assert.strictEqual(count(hookCall, '// wpw.onBrowserCre' + 'ated(fn)\nlet x = 1'), 0)
+        assert.strictEqual(count(hookCall, '/*\n * wpw.onBrowserCre' + 'ated(fn)\n */\nlet x = 1'), 0)
+        assert.strictEqual(count(hookCall, 'wpw.onBrowserCre' + 'atedX(fn)'), 0)
     })
 
     // 規格(R14 之 e): 測試自設之 route 對不處理之請求用 fallback(), 不得以 continue() 放行(頁面層之 route 先於 context 層之 CDN 路由執行, continue() 繞過 CDN 本地副本而直連真網;
@@ -95,15 +126,96 @@ describe('測試不連 CDN(createCdnLocal 之接線)', function() {
         }
     })
 
-    // 鑑別力(對照): 測試自設之啟動替身若以 next() 繞過出口, 其瀏覽器不掛路由, 測試共用層之 isRouted 斷言須判為漏接(而非靜默放行)
-    it('繞過啟動出口之啟動被判為漏接', async function() {
-        let restore = wpw.setBrowserTypeForTest({ launch: async (o, next) => await next() })
+    // 規格(R14 之 c): 鉤子套在 wpw.launchChromium 最終回傳之瀏覽器上, 與 setBrowserTypeForTest(替換)正交——測試自設之啟動替身內直接呼叫 next() 或 next(o) 之瀏覽器仍已掛路由, 且各計數 1 次(next(o) 之內層不另外套)
+    it('自設啟動替身內直接呼叫 next()、next(o) 啟動之瀏覽器仍已掛路由', async function() {
+        assert.ok(hookInstalled(), '前提: 出口鉤子已掛')
+        let forms = [
+            ['next()', async (o, next) => await next()],
+            ['next(o)', async (o, next) => await next(o)],
+        ]
+        for (let [name, launch] of forms) {
+            let seen = 0
+            let n = launchCount()
+            let restore = wpw.setBrowserTypeForTest({
+                launch: async (o, next) => {
+                    seen++
+                    return await launch(o, next)
+                },
+            })
+            let browser
+            try {
+                browser = await wpw.launchChromium()
+            }
+            finally {
+                restore()
+            }
+            try {
+                assert.strictEqual(seen, 1, `${name}: 替身須確被呼叫恰 1 次`)
+                assert.ok(cdn.isRouted(browser), `${name}: 替身內直接呼叫 next 之瀏覽器須已掛 CDN 本地副本路由`)
+                assert.strictEqual(launchCount() - n, 1, `${name}: 鉤子須恰套 1 次`)
+            }
+            finally {
+                await browser.close()
+            }
+        }
+    })
+
+    // 規格(R14 之 c): 出口鉤子失敗(routeBrowser 拋錯)時, 啟動以固定詞彙之 E_LAUNCH_HOOK reject, w-playwright 先關閉該瀏覽器, 不計入 launchCount, 原因印到 stderr(w-playwright 不外露原錯誤, 故須自己印);
+    //   以替身回傳不具 Playwright 介面之假物件(含計數之 close)觸發 routeBrowser 之參數檢測(E_CDN_ARG); 暫時攔截 console.error 以斷言原因確被印出, 結束即還原
+    it('出口鉤子失敗時啟動 reject E_LAUNCH_HOOK、瀏覽器先被關閉、不計數、原因印到 stderr', async function() {
+        assert.ok(hookInstalled(), '前提: 出口鉤子已掛')
+        let n = launchCount()
+        let closed = 0
+        let fake = {
+            close: async () => {
+                closed++
+            },
+        }
+        let logs = []
+        let errOrg = console.error
+        let restore = wpw.setBrowserTypeForTest({ launch: async () => fake })
+        let err = null
         try {
-            await assert.rejects(() => withPage(BLANK, async () => {}), /withPage 啟動之瀏覽器未掛 CDN 本地副本路由\(漏接\)/)
-            await assert.rejects(() => requestsOf(BLANK), /requestsOf 啟動之瀏覽器未掛 CDN 本地副本路由\(漏接\)/)
+            console.error = (...a) => {
+                logs.push(a.join(' '))
+            }
+            err = await wpw.launchChromium().then(() => null, (e) => e)
         }
         finally {
+            console.error = errOrg
             restore()
+        }
+        assert.ok(err && err.code === 'E_LAUNCH_HOOK', '鉤子失敗須使啟動以 E_LAUNCH_HOOK reject')
+        assert.strictEqual(closed, 1, '鉤子失敗時須先關閉該瀏覽器恰 1 次')
+        assert.strictEqual(launchCount(), n, '鉤子失敗者不得計入 launchCount')
+        assert.ok(logs.some((l) => /啟動後鉤子掛 CDN 本地副本路由失敗/.test(l) && /routeBrowser/.test(l)), `原因須印到 stderr: ${JSON.stringify(logs)}`)
+    })
+
+    // 鑑別力(對照): 出口鉤子還原後啟動之瀏覽器不掛路由(cdn.isRouted 為 false、不計數), 測試共用層之 isRouted 斷言須判為漏接(而非靜默放行); 暫時移除者須於案內復掛(復掛後啟動者已掛)
+    it('出口鉤子還原後啟動之瀏覽器未掛路由並被判為漏接', async function() {
+        assert.ok(hookInstalled(), '前提: 出口鉤子已掛')
+        let n = launchCount()
+        await withoutHook(async () => {
+            assert.strictEqual(hookInstalled(), false, '暫時移除期間鉤子須為未掛')
+            let browser = await wpw.launchChromium()
+            try {
+                assert.strictEqual(cdn.isRouted(browser), false, '鉤子還原後啟動者須未掛路由')
+            }
+            finally {
+                await browser.close()
+            }
+            await assert.rejects(() => withPage(BLANK, async () => {}), /withPage 啟動之瀏覽器未掛 CDN 本地副本路由\(漏接\)/)
+            await assert.rejects(() => requestsOf(BLANK), /requestsOf 啟動之瀏覽器未掛 CDN 本地副本路由\(漏接\)/)
+        })
+        assert.strictEqual(launchCount(), n, '鉤子還原期間之啟動不得計入出口之計數')
+        assert.ok(hookInstalled(), '案內須復掛')
+        let browser = await wpw.launchChromium()
+        try {
+            assert.ok(cdn.isRouted(browser), '復掛後啟動者須已掛路由')
+            assert.strictEqual(launchCount() - n, 1)
+        }
+        finally {
+            await browser.close()
         }
     })
 
@@ -148,18 +260,26 @@ describe('測試不連 CDN(createCdnLocal 之接線)', function() {
 
     // 鑑別力(對照): 清單外之外部請求被中止並記錄, 瀏覽器關閉時拋 E_CDN_EXTERNAL(使測試失敗); 以獨立實例承接, 不污染本檔之違規標記
     //   外部網址用 .invalid(不可解析, 路由於解析前攔截)
+    //   獨立實例以其自己之啟動後鉤子掛路由: 啟動前暫時移除出口之鉤子(否則同一瀏覽器亦由主實例路由, 違規會記入主實例), 啟動後即還原該鉤子, 出口鉤子由 withoutHook 復掛
     it('清單外之外部請求被中止並使測試失敗', async function() {
         let iso = makeCdn()
-        let restore = wpw.setBrowserTypeForTest({ launch: async (o, next) => await iso.routeBrowser(await next()) })
-        let browser
+        let browser = await withoutHook(async () => {
+            let restoreIso = wpw.onBrowserCreated((t) => iso.routeBrowser(t))
+            try {
+                return await wpw.launchChromium()
+            }
+            finally {
+                restoreIso()
+            }
+        })
         try {
-            browser = await wpw.launchChromium()
             assert.ok(iso.isRouted(browser) && !cdn.isRouted(browser), '此瀏覽器只由獨立實例路由')
             let page = await browser.newPage()
             await page.setContent('<!doctype html><html><body><script src="https://cdn.fixture.invalid/x.js"></script>ok</body></html>', { waitUntil: 'load' })
         }
-        finally {
-            restore()
+        catch (e) {
+            await browser.close().catch(() => {}) // 前置斷言失敗時關閉瀏覽器(免殘留), 原錯誤照拋
+            throw e
         }
         let err = await browser.close().then(() => null, (e) => e)
         assert.ok(err && err.code === 'E_CDN_EXTERNAL', '關閉時應拋 E_CDN_EXTERNAL')

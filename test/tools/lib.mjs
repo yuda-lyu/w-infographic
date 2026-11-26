@@ -59,7 +59,7 @@ function assertBaseline(buf, name) {
 
 // withPage: 於真瀏覽器載入 html 後執行 fn(page)
 async function withPage(html, fn, opt = {}) {
-    let browser = await wpw.launchChromium() // 一律經 w-playwright 啟動(headless shell; 本層不啟動真 Chrome、Edge、完整 Chromium); 經 cdn.mjs 之單一啟動出口掛 CDN 本地副本路由
+    let browser = await wpw.launchChromium() // 一律經 w-playwright 啟動(headless shell; 本層不啟動真 Chrome、Edge、完整 Chromium); 經 cdn.mjs 掛之啟動後鉤子(單一啟動出口)掛 CDN 本地副本路由
     try {
         assert.ok(cdn.isRouted(browser), 'withPage 啟動之瀏覽器未掛 CDN 本地副本路由(漏接)')
         let page = await browser.newPage({ viewport: { width: 4000, height: 3000 } })

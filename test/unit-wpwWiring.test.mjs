@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import wpw from 'w-playwright'
 import WInfographic from '../src/WInfographic.mjs'
 import { isPng } from './tools/lib.mjs'
-import { useCdnGuard, launchRouted } from './tools/cdn.mjs'
+import { useCdnGuard } from './tools/cdn.mjs'
 import { circlesInp, hexagonInp, treeBandInp, treeP2Inp } from './tools/data.mjs'
 
 const __dir = path.dirname(fileURLToPath(import.meta.url))
@@ -17,7 +17,7 @@ describe('Chromium 啟動經 w-playwright', function() {
 
     useCdnGuard()
 
-    // 本檔自設之啟動替身疊於 test/tools/cdn.mjs 之單一啟動出口之上: 以 launchRouted(next) 啟動(不直接呼叫 next), 使其啟動之瀏覽器仍掛 CDN 本地副本路由
+    // 本檔自設之啟動替身直接呼叫 next() 走真路徑: test/tools/cdn.mjs 掛之啟動後鉤子套在最終回傳給呼叫端之瀏覽器上(與替身正交), 其瀏覽器仍掛 CDN 本地副本路由, 替身內不必自行包路由
 
     // checkGuard: 合併後之選項須恰有一個 --disable-features, 為 args 最後一個元素, 且含守門功能
     let checkGuard = (o, msg) => {
@@ -38,7 +38,7 @@ describe('Chromium 啟動經 w-playwright', function() {
         assert.throws(() => checkGuard({ args: [`--disable-features=${GUARD}`, '--a'] }, 'x'), /最後一個元素/)
     })
 
-    // 規格: 渲染啟動點 renderTrimmed(src/common/render.mjs, circles、hexagon、hierarchy p1 共用)送出之選項含守門; 以 launchRouted(next) 走真路徑(headless shell, 不啟動真 Chrome)
+    // 規格: 渲染啟動點 renderTrimmed(src/common/render.mjs, circles、hexagon、hierarchy p1 共用)送出之選項含守門; 以 next() 走真路徑(headless shell, 不啟動真 Chrome)
     it('circles、hexagon、hierarchy p1 之啟動送出含守門之選項(替身確被呼叫)', async function() {
         let cases = [
             { name: 'circles', inp: circlesInp, opt: { type: 'circles' } },
@@ -50,7 +50,7 @@ describe('Chromium 啟動經 w-playwright', function() {
             let restore = wpw.setBrowserTypeForTest({
                 launch: async (o, next) => {
                     seen.push(o)
-                    return await launchRouted(next)
+                    return await next()
                 },
             })
             try {
@@ -95,7 +95,7 @@ describe('Chromium 啟動經 w-playwright', function() {
         let restore = wpw.setBrowserTypeForTest({
             launch: async (o, next) => {
                 seen.push(o)
-                return await launchRouted(next)
+                return await next()
             },
         })
         try {
